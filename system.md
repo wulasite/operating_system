@@ -2,11 +2,11 @@
 
 现在在大三下写操作系统的目的是为了能够省去小学期的时间，看下能否出去找个实习。而且大三上正好也学了才操作系统，做了ucore的实验，对操作系统有初步的了解，所以算是进一步了解操作系统这个庞然大物。
 
-由于小学期的操作系统是参考的《30天自制操作系统》，所以直接参考这本书进行学习，查了些资料，还有建议看看《深入理解linux内核》。
+由于小学期的操作系统是参考的《30天自制操作系统》，所以直接参考这本书进行学习，原本想仿照64位的系统，但无法，查了些资料，还有建议看看《深入理解linux内核》。
 
 
 
-## 第一天
+## 第一天 从搞计算机结构到汇编程序入门
 
 完整看完第一天的东西之后，发现一些有趣的事情。一开始作者想叫我们手打个helloos.img，我打了一下发现比较耗时间。所以去找作者提供的东西了。找到了一个[github](https://github.com/yourtion/30dayMakeOS) ，里面的tolset文件夹，有很多有用的工具。可以用作者自己做的nask.exe去生成img，不用自己打。将前面的下的github文件里的tolset\z_tools的nask.exe复制到01_day里，运行
 
@@ -16,7 +16,7 @@ nask helloos.nas helloos.img
 
 就可以生成了这个img了
 
-然后在tolset文件夹新建一个helloos0，把01_day里的东西都复制进去，然后运行run.bat，可以看到。
+然后在tolset文件夹新建一个day1，把01_day里的东西都复制进去，然后运行run.bat，可以看到。
 
 ![](./hello.png)
 
@@ -24,5 +24,74 @@ nask helloos.nas helloos.img
 
 这里值得一提的是，作者一开始说的是需要一个软盘，用install.bat装入到软盘里，然后在拿u盘启动系统。事实上这是十分麻烦的事情，而且还要32位的系统，所以一开始还试了一堆奇奇怪怪的方式，用阿里云装了个winser 2008 32位的系统，不行，然后就用VM装了个win7 32位，后来就发现后面用了qemu，在本机试了一下可以直接run.bat，不需要32位系统，或许后面需要，当备用。qemu在ucore实验也用了，真的是十分好用的一个东西。
 
-## 第二天
+## 第二天 汇编语言学习与Makefile入门
+
+第二天主要讲了几个汇编指令、修改nas文件和Makefile的制作
+
+ipl.nas里面的内容的前半部分是helloos.nas的前半部分
+
+```
+		ORG		0x7c00			; 指明程序装载地址
+```
+
+这里作者这讲了为什么是程序的装载地址是0x7c00,因为这是以前的开发者规定的0x00007c00-0x00007dff是启动区的内容装载地址。
+
+```
+entry:
+		MOV		AX,0			; 初始化寄存器
+		MOV		SS,AX
+		MOV		SP,0x7c00
+		MOV		DS,AX
+		MOV		ES,AX
+```
+
+entry部分就是初始化寄存器，让AX SS DS ES=0，SP=0x7c00，sp是stack pointer寄存器，大概是放程序片的吧。
+
+```
+putloop:
+		MOV		AL,[SI]
+		ADD		SI,1			; 给SI加1
+		CMP		AL,0
+		JE		fin
+		MOV		AH,0x0e			; 显示一个文字
+		MOV		BX,15			; 指定字符颜色
+		INT		0x10			; 调用显卡BIOS
+		JMP		putloop
+```
+
+putloop后面调用了INT 0x10,这个是显示字符的相关中断，书上有讲。而前面部分则是让AL不停的去[SI+1]里面取值，直到碰到结束符0。相当于一个for循环。做完这些让cpu进入fin，让cpu停止并等待指令。
+
+```
+fin:
+		HLT						; 让CPU停止，等待指令
+		JMP		fin				; 无限循环
+```
+
+中间讲了用bat去制作镜像，不过这个可以跳过，直接用Makefile。作者简单的讲了Makefile的用法，然后我是使用的时候遇到了问题，执行make run的时候出现
+```
+process_begin: CreateProcess((null), copy helloos.img ..\z_tools\qemu\fdimage0.bin, ...) failed.
+make (e=2): 系统找不到指定的文件。
+```
+
+
+无法将制作好的img copy到qemu文件夹里，查找半天资料，发现一个和我[一样的](https://blog.csdn.net/KINGKINGlj/article/details/50502321)。虽然没有解决，但是里面的链接所研究的问题倒是值得一看。我的解决方法是，新建一个copy.bat，写入
+
+```
+copy helloos.img ..\z_tools\qemu\fdimage0.bin
+```
+
+然后修改Makefile的run参数里的copy(26行)
+
+```
+	copy helloos.img ..\z_tools\qemu\fdimage0.bin -> copy.bat
+```
+
+这样调用即可成功make run 
+
+![](./day2.png)
+
+
+
+
+
 
