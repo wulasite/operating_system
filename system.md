@@ -92,6 +92,54 @@ copy helloos.img ..\z_tools\qemu\fdimage0.bin
 
 
 
+## 第三天 进入32位模式并导入C语言
 
+​	第三天主要讲了用IPL装载程序，并用汇编对磁盘进行操作，同时处理报错，然后引入C语言。	
 
+​	到这里，才发现其实我并不知道IPL是什么东西，所以需要去了解一下。本书第一天的内容有讲到
+
+![](./IPL.png)
+
+以及[CSDN博客](https://blog.csdn.net/jackli8431/article/details/51015020)中提到的，在MBR分区中，启动区只有512字节，所以不可能放整个程序进去，所以就放个IPL进去，然后通过IPL加载操作系统。
+
+​	主要新增的汇编代码有
+
+```
+; 读取磁盘
+
+		MOV		AX,0x0820
+		MOV		ES,AX
+		MOV		CH,0			; 柱面0
+		MOV		DH,0			; 磁头0
+		MOV		CL,2			; 扇区2
+
+readloop:
+		MOV		SI,0			; 记录失败次数寄存器
+
+retry:
+		MOV		AH,0x02			; AH=0x02 : 读入磁盘
+		MOV		AL,1			; 1个扇区
+		MOV		BX,0
+		MOV		DL,0x00			; A驱动器		INT		0x13			; 调用磁盘BIOS
+		JNC		next			; 没出错则跳转到fin
+		ADD		SI,1			; 往SI加1
+		CMP		SI,5			; 比较SI与5
+		JAE		error			; SI >= 5 跳转到error
+		MOV		AH,0x00
+		MOV		DL,0x00			; A驱动器
+		INT		0x13			; 重置驱动器
+		JMP		retry
+```
+
+这里主要是调用INT 0x13来对磁盘进行操作，下面是一些参数的解释
+
+![](./cipan.png)
+
+之所以要加载这个位置是因为IPL在这里
+
+![](./IPL1.png)
+
+后面的内容有点奇怪，对于haribote.nas的内容不是很能理解，以及讲了bootpack.c，如何用作者改的cc1编译器将.c文件变成汇编文件，然后会汇编实现了HLT语句。
+
+最后运行make run，还是会出现copy的错误，还是用上文第二天的方法解决即可，还有将del换成了rm，因为我的cmd环境有装bash，所以也可以make clean，要不然有点不爽。运行出来确实是黑屏，还以为失败了。
 
