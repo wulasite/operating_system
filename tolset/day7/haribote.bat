@@ -1,0 +1,1 @@
+copy /B asmhead.bin+bootpack.hrb haribote.sys

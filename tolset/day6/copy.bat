@@ -1,0 +1,1 @@
+copy haribote.img ..\z_tools\qemu\fdimage0.bin
