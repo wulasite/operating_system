@@ -18,7 +18,7 @@ nask helloos.nas helloos.img
 
 然后在tolset文件夹新建一个day1，把01_day里的东西都复制进去，然后运行run.bat，可以看到。
 
-![](./hello.png)
+![](./img/hello.png)
 
 这样就算完成第一天的工作了。nas里面的代码的研究应该是放在后面。
 
@@ -88,7 +88,7 @@ copy helloos.img ..\z_tools\qemu\fdimage0.bin
 
 这样调用即可成功make run 
 
-![](./day2.png)
+![](./img/day2.png)
 
 
 
@@ -98,7 +98,7 @@ copy helloos.img ..\z_tools\qemu\fdimage0.bin
 
 ​	到这里，才发现其实我并不知道IPL是什么东西，所以需要去了解一下。本书第一天的内容有讲到
 
-![](./IPL.png)
+![](./img/img/IPL.png)
 
 以及[CSDN博客](https://blog.csdn.net/jackli8431/article/details/51015020)中提到的，在MBR分区中，启动区只有512字节，所以不可能放整个程序进去，所以就放个IPL进去，然后通过IPL加载操作系统。
 
@@ -133,11 +133,11 @@ retry:
 
 这里主要是调用INT 0x13来对磁盘进行操作，下面是一些参数的解释
 
-![](./cipan.png)
+![](./img/cipan.png)
 
 之所以要加载这个位置是因为IPL在这里
 
-![](./IPL1.png)
+![](./img/IPL1.png)
 
 后面的内容有点奇怪，对于haribote.nas的内容不是很能理解，以及讲了bootpack.c，如何用作者改的cc1编译器将.c文件变成汇编文件，然后会汇编实现了HLT语句。
 
@@ -173,3 +173,10 @@ retry:
 ## 第七天 FIFO与鼠标控制
 
 第七天的内容比较少。主要讲了处理鼠标中断和使用FIFO缓冲区来从鼠标获取数据。看来感觉很奇怪，也没有着重讲中断。主要讲了使用缓冲区的原因和改进缓冲区的数据结构。
+
+![](./img/day7.png)
+
+
+
+
+## 第八天 鼠标控制与32位模式切换
