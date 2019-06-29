@@ -390,4 +390,74 @@ void sheet_free(struct SHTCTL *ctl, struct SHEET *sht);
 
 ## 第十三天 定时器
 
-今天主要是
+本章节也主要是一些简单的工作
+
+1. 简化字符串
+2. 重新调整FIFO缓冲区
+3. 再次加快中断处理
+4. 使用“哨兵”简化程序
+
+## 第十四天 高分辨率及键盘输入
+
+1. 提高分辨率
+   ![](./img/vesa.png)
+
+2. 在真机上提高分辨率
+   ![](./img/vesa2.png)
+
+
+   ![](./img/vesa3.png)
+
+   接下来大概是处理键盘的输入显示在屏幕上，按下和弹起都有对应的值，需要一张对应表。
+
+
+
+## 第15天 多任务（1）
+
+1. 挑战多任务
+2. 任务切换进阶
+3. 做个简单的多任务
+4. 提高运行速度及测试
+5. 多任务进阶
+
+实现多任务，不可避免的要说到上下文切换和进程调度。本章首先介绍了任务状态段(TSS)
+
+![](./img/TSS1.png)
+
+任务切换要用到JMP指令，JMP指令分为两种,
+
+![](./img/TSS2.png)
+
+```c
+#include "bootpack.h"
+
+struct TIMER *mt_timer;
+int mt_tr;
+
+void mt_init(void)
+{
+	mt_timer = timer_alloc();
+	/*这里没有必要使用timer_init */
+	timer_settime(mt_timer, 2);
+	mt_tr = 3 * 8;
+	return;
+}
+
+void mt_taskswitch(void)
+{
+	if (mt_tr == 3 * 8) {
+		mt_tr = 4 * 8;
+	} else {
+		mt_tr = 3 * 8;
+	}
+	timer_settime(mt_timer, 2);
+	farjmp(0, mt_tr);
+	return;
+}
+```
+
+
+
+
+
+## 第十六天 多任务(2)
