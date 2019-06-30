@@ -461,3 +461,199 @@ void mt_taskswitch(void)
 
 
 ## 第十六天 多任务(2)
+
+1. 任务管理自动化
+
+   上一天的任务管理是手动切换，比如当任务是3时切换到4，是4切换到3。所以需要升级成自动管理的样子。
+
+   基本的任务数据结构
+
+   ```c
+   /* mtask.c */
+   #define MAX_TASKS 1000	/*最大任务数量*/
+   #define TASK_GDT0 3			/*定义从GDT的几号开始分配给TSS */
+   #define MAX_TASKS_LV    100
+   #define MAX_TASKLEVELS  10
+   struct TSS32 {
+   	int backlink, esp0, ss0, esp1, ss1, esp2, ss2, cr3;
+   	int eip, eflags, eax, ecx, edx, ebx, esp, ebp, esi, edi;
+   	int es, cs, ss, ds, fs, gs;
+   	int ldtr, iomap;
+   };
+   
+   struct TASK {
+   	int sel, flags;		/* sel用来存放GDT的编号*/
+   	int level, priority; /* 优先级 */
+   	struct TSS32 tss;
+   };
+   
+   struct TASKCTL {
+   	int now_lv; /*现在活动中的LEVEL */
+   	char lv_change; /*在下次任务切换时是否需要改变LEVEL */
+   	struct TASKLEVEL level[MAX_TASKLEVELS];
+   	struct TASK tasks0[MAX_TASKS];
+   };
+   ```
+
+   任务初始化
+
+   ```c
+   struct TASK *task_init(struct MEMMAN *memman)
+   {
+   	int i;
+   	struct TASK *task;
+   	struct SEGMENT_DESCRIPTOR *gdt = (struct SEGMENT_DESCRIPTOR *) ADR_GDT;
+   	taskctl = (struct TASKCTL *) memman_alloc_4k(memman, sizeof (struct TASKCTL));
+   
+   	for (i = 0; i < MAX_TASKS; i++) {
+   		taskctl->tasks0[i].flags = 0;
+   		taskctl->tasks0[i].sel = (TASK_GDT0 + i) * 8;
+   		set_segmdesc(gdt + TASK_GDT0 + i, 103, (int) &taskctl->tasks0[i].tss, AR_TSS32);
+   	}
+   	for (i = 0; i < MAX_TASKLEVELS; i++) {
+   		taskctl->level[i].running = 0;
+   		taskctl->level[i].now = 0;
+   	}
+   	task = task_alloc();
+   	task->flags = 2; /*活动中标志*/
+   	task->priority = 2; /* 0.02秒*/
+   	task->level = 0; /*最高LEVEL */
+   	task_add(task);
+   	task_switchsub(); /* LEVEL 设置*/
+   	load_tr(task->sel);
+   	task_timer = timer_alloc();
+   	timer_settime(task_timer, task->priority);
+   	return task;
+   }
+   ```
+
+   任务分配
+
+   ```c
+   struct TASK *task_alloc(void)
+   {
+   	int i;
+   	struct TASK *task;
+   	for (i = 0; i < MAX_TASKS; i++) {
+   		if (taskctl->tasks0[i].flags == 0) {
+   			task = &taskctl->tasks0[i];
+   			task->flags = 1;   /*正在使用的标志*/
+   			task->tss.eflags = 0x00000202; /* IF = 1; */
+   			task->tss.eax = 0; /*这里先置为0*/
+   			task->tss.ecx = 0;
+   			task->tss.edx = 0;
+   			task->tss.ebx = 0;
+   			task->tss.ebp = 0;
+   			task->tss.esi = 0;
+   			task->tss.edi = 0;
+   			task->tss.es = 0;
+   			task->tss.ds = 0;
+   			task->tss.fs = 0;
+   			task->tss.gs = 0;
+   			task->tss.ldtr = 0;
+   			task->tss.iomap = 0x40000000;
+   			return task;
+   		}
+   	}
+   	return 0; /*全部正在使用*/
+   }
+   ```
+
+   任务切换
+
+   ```c
+   void task_switch(void)
+   {
+   	struct TASKLEVEL *tl = &taskctl->level[taskctl->now_lv];
+   	struct TASK *new_task, *now_task = tl->tasks[tl->now];
+   	tl->now++;
+   	if (tl->now == tl->running) {
+   		tl->now = 0;
+   	}
+   	if (taskctl->lv_change != 0) {
+   		task_switchsub();
+   		tl = &taskctl->level[taskctl->now_lv];
+   	}
+   	new_task = tl->tasks[tl->now];
+   	timer_settime(task_timer, new_task->priority);
+   	if (new_task != now_task) {
+   		farjmp(0, new_task->sel);
+   	}
+   	return;
+   }
+   ```
+
+   
+
+2. 让任务休眠和设定窗口优先级
+
+   让任务休眠的主要做法是，让没有运行需求的任务从任务队列中剔除，如果有任务来，就唤醒它。这样做的目的是为了节约资源。
+
+   ```c
+   void task_sleep(struct TASK *task)
+   {
+   	struct TASK *now_task;
+   	if (task->flags == 2) {
+   		/*如果处于活动状态*/
+   		now_task = task_now();
+   		task_remove(task); /*执行此语句的话flags将变为1 */
+   		if (task == now_task) {
+   			/*如果是让自己休眠，则需要进行任务切换*/
+   			task_switchsub();
+   			now_task = task_now(); /*在设定后获取当前任务的值*/
+   			farjmp(0, now_task->sel);
+   		}
+   	}
+   	return;
+   }
+   
+   ```
+
+   ```c
+   int fifo32_put(struct FIFO32 *fifo, int data)
+   /*向FIFO写入数据并累积起来*/
+   {
+   	if (fifo->free == 0) {
+   		/*没有空余空间，溢出*/
+   		fifo->flags |= FLAGS_OVERRUN;
+   		return -1;
+   	}
+   	fifo->buf[fifo->p] = data;
+   	fifo->p++;
+   	if (fifo->p == fifo->size) {
+   		fifo->p = 0;
+   	}
+   	fifo->free--;
+   	if (fifo->task != 0) {
+   		if (fifo->task->flags != 2) { /*如果任务处于休眠状态*/
+   			task_run(fifo->task, -1, 0); /*将任务唤醒*/
+   		}
+   	}
+   	return 0;
+   }
+   ```
+
+   ```c
+   void task_run(struct TASK *task, int level, int priority)
+   {
+   	if (level < 0) {
+   		level = task->level; /*不改变LEVEL */
+   	}
+   	if (priority > 0) {
+   		task->priority = priority;
+   	}
+   	if (task->flags == 2 && task->level != level) { 
+   		/*改变活动中的LEVEL */
+   		task_remove(task); /*这里执行之后flag的值会变为1，于是下面的if语句块也会被执行*/
+   	}
+   	if (task->flags != 2) {
+   		/*从休眠状态唤醒的情形*/
+   		task->level = level;
+   		task_add(task);
+   	}
+   	taskctl->lv_change = 1; /*下次任务切换时检查LEVEL */
+   	return;
+   }
+   ```
+
+   
